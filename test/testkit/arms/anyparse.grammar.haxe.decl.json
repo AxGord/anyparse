@@ -143,7 +143,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxTopLevelDecl",
 			"method": "HxTopLevelDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "module-level metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -152,7 +152,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxMemberDecl",
 			"method": "HxMemberDecl",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'),\n\t\tmetaLineEndBreakIf('modifiersLeadWithComplexRegion'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'),\n\t\tmetaLineEndBreakIf('modifiersLeadWithComplexRegion', 'modifiersLeadWithRegion'))\n\t",
 			"replace": "",
 			"note": "member metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -161,7 +161,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxEnumMember",
 			"method": "HxEnumMember",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "enum constructor metadata names no simplicity predicate, so fit breaks it one per line"
 		},
@@ -170,7 +170,7 @@
 			"type": "anyparse.grammar.haxe.decl.HxAnonMember",
 			"method": "HxAnonMember",
 			"kind": "TypedefDecl",
-			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
+			"find": "@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'))\n\t",
 			"replace": "",
 			"note": "anon field metadata names no simplicity predicate, so fit breaks it one per line"
 		},

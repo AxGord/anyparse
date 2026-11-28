@@ -56,15 +56,11 @@ class MetadataFitFirstLineTest extends Test {
 		);
 	}
 
-	/** Several simple metadata still share a row of their own above a header that wraps. */
-	public function testSeveralMetadataKeepTheirOwnRow(): Void {
+	/** Several short metadata keep the line of a header that wraps, as a lone one does. */
+	public function testSeveralShortMetadataKeepAWrappedHeaderLine(): Void {
 		final src: String = '@:a @:b final class Cls\n\textends Base<Array<ItemWithAVeryLongName>, ResponseWithAnotherVeryLongName, '
 			+ '{timestamp:String, description:String, identifier:Int}> {}\n';
-		Assert.equals(
-			'@:a @:b\nfinal class Cls\n\textends Base<Array<ItemWithAVeryLongName>, ResponseWithAnotherVeryLongName, '
-			+ '{timestamp:String, description:String, identifier:Int}> {}\n',
-			fit(src)
-		);
+		Assert.equals(src, fit(src));
 	}
 
 	/** A second write of a kept metadata changes nothing. */

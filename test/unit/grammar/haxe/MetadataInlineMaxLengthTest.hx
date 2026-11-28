@@ -100,21 +100,24 @@ class MetadataInlineMaxLengthTest extends Test {
 	}
 
 	/**
-	 * Several simple metadata keep their row above the declaration, or break
-	 * one per line, by the row's width alone: the cap reads a lone one only.
+	 * Each metadata of a run is measured by the cap: a wider one is long and stands on its own line, while a short one
+	 * after it keeps the declaration's line. A local var's row is not measured.
 	 */
 	@:pin('control')
-	@:killer('M-META-INLINE-MAX-ROW-CAPPED')
-	public function testARowOfSeveralSimpleMetadataIsNotMeasured(): Void {
+	@:killer('M-META-INLINE-MAX-SHORT-UNCAPPED', 'M-META-FIT-SHORT-PAIR-JOINS', 'M-META-FIT-LAST-NEVER-GLUES')
+	public function testEachMetadataOfARunIsMeasured(): Void {
 		Assert.equals(
-			'@:timeout(10) @:timeout(20)\nclass R {\n\t@:timeout(10) @:timeout(20)\n\tvar r:Int;\n\n\tfunction h() {\n'
+			'@:timeout(10)\n@:timeout(20)\nclass R {\n\t@:timeout(10)\n\t@:timeout(20)\n\tvar r:Int;\n\n\tfunction h() {\n'
 			+ '\t\t@:timeout(10) @:timeout(20)\n\t\tvar z = 1;\n\t}\n}\n',
 			capped(
 				'@:timeout(10) @:timeout(20) class R {\n\t@:timeout(10) @:timeout(20) var r:Int;\n\n\tfunction h() {\n'
 				+ '\t\t@:timeout(10) @:timeout(20) var z = 1;\n\t}\n}\n'
 			)
 		);
-		// A row past the maximum still breaks one per line: the cap leaves the row's own measure alone.
+		Assert.equals(
+			'class S {\n\t@SuppressWarnings(\'checkstyle:InnerAssignment\')\n\t@:op(A -= B) public function sub():Void {}\n}\n',
+			capped('class S {\n\t@SuppressWarnings(\'checkstyle:InnerAssignment\') @:op(A -= B) public function sub():Void {}\n}\n')
+		);
 		final wide: String = [ for (_ in 0...70) 'a' ].join('');
 		Assert.equals('@:a(\'$wide\')\n@:b(\'$wide\')\nclass L {}\n', capped('@:a(\'$wide\') @:b(\'$wide\') class L {}\n'));
 	}

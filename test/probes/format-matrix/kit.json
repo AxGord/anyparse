@@ -28,7 +28,9 @@
 		"returnsemicolon/hxformat.json": "{\"whitespace\": {\"returnSemicolon\": \"never\"}}\n",
 		"returnsemicolon/C.hx": "class C {\n\tfunction f(v: Int): Int {\n\t\tfinal g = () -> {\n\t\t\treturn {a: 1};\n\t\t};\n\t\treturn switch (v) {\n\t\t\tcase _: 1;\n\t\t};\n\t}\n}\n",
 		"condmodifier/hxformat.json": "{\"lineEnds\": {\"metadataType\": \"fit\", \"metadataFunction\": \"fit\", \"metadataVar\": \"fit\", \"metadataOther\": \"fit\"}}\n",
-		"condmodifier/C.hx": "class C {\n\t@:a #if !(sys || js) extern #end\n\tfunction g():Void {}\n\n\t@:a #if ((sys)) extern #end\n\tfunction h():Void {}\n}\n"
+		"condmodifier/C.hx": "class C {\n\t@:a #if !(sys || js) extern #end\n\tfunction g():Void {}\n\n\t@:a #if ((sys)) extern #end\n\tfunction h():Void {}\n}\n",
+		"metarun/hxformat.json": "{\"lineEnds\":{\"metadataType\":\"fit\",\"metadataFunction\":\"fit\",\"metadataVar\":\"fit\",\"metadataOther\":\"fit\",\"metadataInlineMaxLength\":20},\"indentation\":{\"character\":\"tab\"}}",
+		"metarun/S.hx": "class S {\n\t@:build(m.B.build()) @:aaaaaaaaaaaaaaaaaa @:bbbbbbbbbbbbbbbbbb @:cccccccccccccccccc @:dddddddddddddddddd @:eeeeeeeeeeeeeeeeee @:ffffffffffffffffff @:gggggggggggggggggg @:hhhhhhhhhhhhhhhhhh @:iiiiiiiiiiiiiiiiii public function g():Void {}\n}\n"
 	},
 	"invocations": [
 		{
@@ -758,6 +760,38 @@
 			"expect": {
 				"exit": 0,
 				"out": "1c97fc0eb38940eb",
+				"err": "e3b0c44298fc1c14",
+				"files": "e3b0c44298fc1c14",
+				"compiles": [
+					true
+				],
+				"onePass": true,
+				"commentsKept": true
+			}
+		},
+		{
+			"name": "metarun/S.hx",
+			"note": "hxq fmt under lineEnds.metadata* fit with metadataInlineMaxLength 20 of a call-bearing metadata followed by nine short ones wider together than the line: the call-bearing one stands alone, the short ones go one per line within the width and the last keeps the declaration's line; the output compiles",
+			"fixpoint": "metarun/S.hx",
+			"argv": [
+				"hxq",
+				"fmt",
+				"metarun/S.hx"
+			],
+			"compile": {
+				"args": [
+					"-cp",
+					"metarun",
+					"--no-output",
+					"S"
+				],
+				"defines": [
+					[]
+				]
+			},
+			"expect": {
+				"exit": 0,
+				"out": "7a3f07b778c83c0a",
 				"err": "e3b0c44298fc1c14",
 				"files": "e3b0c44298fc1c14",
 				"compiles": [

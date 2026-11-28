@@ -970,8 +970,8 @@ final class HxModuleWriteOptions {
 	/**
 	 * The widest one simple metadata may be written and still stay on its declaration's line under `Fit`, on every
 	 * `metadata*LineEnd` site (`lineEnds.metadataInlineMaxLength`): a wider one takes a line of its own above the
-	 * declaration. The width is that of the written metadata, its `@` included. `0` (default) is no limit. A row
-	 * of several simple metadata is not measured by it.
+	 * declaration. The width is that of the written metadata, its `@` included. `0` (default) is no limit. In a
+	 * run of several it is the bound of a short metadata: a wider one stands on a line of its own.
 	 */
 	public var metadataInlineMaxLength: Int = 0;
 

@@ -110,7 +110,8 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 			[raw.substr(0, eq), raw.substr(eq + 1)];
 		} ];
 		_metaPolicyExpr = WriterMetaLineEndLowering.decisionDecls(
-			ctx.ctorPat, starNode, c.typePath, c.fieldAccess, macro _arr, macro _trailLC
+			ctx.ctorPat, starNode, c.typePath, c.fieldAccess, macro _arr, macro _trailLC,
+			triviaTryparseElemCallExpr(c.elemFn, _plan.clearExprPositionNonTail())
 		);
 		_metaInlineCap = WriterMetaLineEndLowering.fitInlineCapExpr(starNode, macro _elem);
 		final cascadeInfos: CascadeInfos = WriterCtorBlankLowering.readCascadeInfosFromStar(ctx.ctorBlank, starNode, c.elemRefName);
@@ -311,7 +312,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 	 *
 	 */
 	private function triviaTryparseMainExpr(): Expr {
-		final metaRowWrap: Expr = WriterMetaLineEndLowering.fitRowWrapExpr(macro _metaRowAt);
+
 		final priorAfterTrailRaw: Expr = _priorAfterTrail ?? macro (null: Null<String>);
 		// A first element led by a comment breaks before it on its own, so its pad has nothing to add on a broken verdict.
 		final leadPad: Expr = regionPadSlotExpr(
@@ -396,9 +397,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				// the splice site reads it safely; when sepText is null /
 				// blockEnded false, the splice expands to `{}` (no read).
 				var _priorElemDoc: Null<anyparse.core.Doc> = null;
-				final _metaRowAt: Int = _docs.length;
 				$whileExpr;
-				$metaRowWrap;
 				$assemblyExpr;
 			}
 		};
@@ -439,6 +438,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				${_cascade.currCompute};
 				$blockEndedSepEmit;
 				$sepCascade;
+				${WriterMetaLineEndLowering.fitSegOpenExpr(macro _si)};
 				final _elem: anyparse.core.Doc = $_elemCall;
 				$_metaInlineCap;
 				final _tc: Null<String> = _t.trailingComment;
@@ -447,6 +447,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 						? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt))
 						: ${WriterMetaLineEndLowering.fitLoneDocExpr(macro _elem)}
 				);
+				${WriterMetaLineEndLowering.fitSegCloseExpr(macro _si)};
 				// ω-cond-indent-policy AlignedNestedIncrease: if this body
 				// element is itself a nested `Conditional`, lift its whole
 				// span (leading separator + markers + guarded body, captured
@@ -483,7 +484,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr(regionGapDecide);
 		final linedBlanks: Expr = triviaTryparseLinedBlanksExpr(regionGapDecide);
 		final forceInlineCond: Expr = triviaTryparseForceInlineSepCond(_plan.forceInlineSep());
-		final metaSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
+		final metaSep: Expr = WriterMetaLineEndLowering.fitSepExpr(macro _si - 1, macro _si);
 		final metaNoneBreak: Expr = WriterMetaLineEndLowering.noneKeepsBreakExpr(_plan.metaLineEndInline(), macro _t.newlineBefore);
 		return macro {
 			if ($_glueToPreviousExpr) {
@@ -596,7 +597,7 @@ final class TriviaTryparseLowering extends TriviaStarEmit<TryparseStarPlan> {
 				_lineTrailBroken = _padHardline || _trailEndsLine;
 				_docs.push($trailPad);
 			} else if (_metaPolicy > 0 && _arr.length > 0) {
-				_lineTrailBroken = _metaFit != 1;
+				_lineTrailBroken = !${WriterMetaLineEndLowering.fitKeepsLineExpr()};
 				_docs.push($metaAfterLast);
 			}
 			// ω-trivia-tryparse-linelength: when the LAST element carries

@@ -19,11 +19,13 @@ package anyparse.format;
  * space AND a hardline fires after the last element: the
  * `@A @B @C\nfunction main()` shape.
  *
- * `Fit` — decided by width, from simplicity the grammar's predicate reads
- * off each element: one simple element stays on the declaration's line
- * when that line fits, several simple ones share one line of their own
- * above it when that row fits, and anything else is one per line; a grammar may name a predicate
- * over what follows the run that sends the one simple element to its own line all the same.
+ * `Fit` — decided by width, from what the grammar's predicates read off each
+ * element: one simple element stays on the declaration's line when that line
+ * fits; in a run of several two short neighbours share a line, a long one
+ * stands alone, and a short last one stays on the declaration's line; a run
+ * of short ones only is one row that breaks one per line when it does not
+ * fit; anything else is one per line. A grammar may name predicates over what
+ * follows the run that send the lone or the last element to its own line all the same.
  *
  * Consumed by `@:fmt(metaLineEndPolicy('<optField>'))` and its
  * `metaLineEndIfCtor` / `metaLineEndChain` refinements, which name a

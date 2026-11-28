@@ -494,14 +494,19 @@ haxe-formatter's schema. It is decided by width and never reads the source layou
   line of its own — and, when `lineEnds.metadataInlineMaxLength` is set, also when the metadata itself is wider than that
   (below). The head ends where the body or the initializer may break: at a var's `=`, before a body
   `sameLine.functionBody: fitLine` may move. A body or initializer that does not fit breaks first, and the metadata stays;
-- several simple metadata share one line above the declaration when that row fits, and are never joined to the declaration itself;
-- otherwise — a complex metadata, a row that does not fit, a comment between metadata or after the last one, a `#if` in the run — one per line, as `after`.
+- in a run of several, a long metadata stands on a line of its own and the short ones share a line with their short
+  neighbours; the last one, when short, stays on the declaration's line as one simple metadata does. Each row of short
+  neighbours, a run of short metadata only or the ones beside a long metadata, goes one per line when it does not fit;
+  its last stays on the declaration's line all the same;
+- otherwise — a lone complex metadata, a comment between metadata or after the last one, a `#if` in the run — one per
+  line, as `after`.
 
 A conditional modifier region after one simple metadata shares the metadata's line, the declaration staying on the next,
 when the region is simple and the joined line fits: a condition of one test (a flag, `!flag`, one comparison, with or without
 parentheses), no `#elseif`, one modifier in the `#if` branch, at most one modifier or simple metadata in `#else`, no comment.
 Any other region (`#if (sys && !js)`, an `#elseif`, `#if sys extern inline`) puts the metadata on a line of its own and the
-region on the next; after several metadata the region always takes its own line. `none` keeps the source's break.
+region on the next. After several metadata sharing a line the region always takes its own line; a short metadata
+alone on its line after a long one is read as one simple metadata. `none` keeps the source's break.
 
 ```haxe
 @:op(A && B) #if (haxe_ver >= 4.2) extern #else @:extern #end
@@ -516,27 +521,36 @@ Simple is no argument, or exactly one that is a number, `true` / `false` / `null
 one-line string without interpolation, a prefix or binary operator over such operands, or a call of a dotted path whose
 arguments are all such operands (`@:nullSafety(Strict)`, `@:access(pkg.Type)`, `@:xml('action')`, `@:op(A + B)`, `@:op(-A)`,
 `@:op(a())`). A call of anything but a path, several arguments, an object, array or function literal, an operator over any
-of them and an interpolated or multi-line string are complex. With `fit` on all four keys:
+of them and an interpolated or multi-line string are complex. Short is simple with no call, and no wider than
+`lineEnds.metadataInlineMaxLength` when that is set: a metadata whose argument holds a call (`@:build(m.B.build())`,
+`@:op(a())`) is never short, so it never shares a line with another metadata, though alone before its declaration it
+rides the declaration's line. With `fit` on all four keys and `metadataInlineMaxLength: 20`:
 
 ```haxe
-@:access(a.B) @:nullSafety(Strict)
-abstract class C {
+@:build(m.B.build())
+@:nullSafety(Strict) abstract class C {
 	@:from public static inline function f(v:Int):C {}
 
+	@:nullSafety(Off) @:bindable public var x:Int;
+
+	@SuppressWarnings('checkstyle:InnerAssignment')
+	@:op(A -= B) public function sub(b:C):C {}
+
 	@:build(a().b())
-	@:a
-	var t:Int;
+	@:a var t:Int;
 }
 ```
 
-A local `var` or `final` follows the same rules: `@:a @:b var x = 1;` puts `@:a @:b` on a line of its own above the `var`.
+Without `metadataInlineMaxLength` every simple metadata without a call is short, whatever its width. A local `var` or
+`final` keeps the earlier rule: `@:a @:b var x = 1;` puts `@:a @:b` on a line of its own above the `var`.
 
-### A width limit for the one metadata on the declaration's line: `lineEnds.metadataInlineMaxLength`
+### A width limit for metadata on the declaration's line: `lineEnds.metadataInlineMaxLength`
 
 An integer, not part of haxe-formatter's schema. Under `fit` — on all four `metadata*` keys and on a local `var` —
 the one simple metadata stays on its declaration's line only when its own written text, the `@` included, is at
-most this many characters; a wider one takes a line of its own above the declaration. Unset or `0` is no limit.
-A row of several simple metadata is not measured by it, and nothing changes for a key that is not `fit`.
+most this many characters; a wider one takes a line of its own above the declaration. Each metadata of a run of
+several is measured the same way: one within the limit is short, a wider one long. Unset or `0` is no limit; a
+local var's row is not measured, and nothing changes for a key that is not `fit`.
 
 ```json
 { "lineEnds": { "metadataFunction": "fit", "metadataInlineMaxLength": 20 } }

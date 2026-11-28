@@ -2815,7 +2815,7 @@
 			"name": "M-META-FIT-ONE-BREAKS",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitAfterLastExpr",
-			"find": "_metaFit == 1 ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl()",
+			"find": "${fitKeepsLineExpr()} ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl()",
 			"replace": "_dhl()",
 			"note": "under fit a lone simple metadata always takes its own line, as under after"
 		},
@@ -2838,7 +2838,7 @@
 		{
 			"name": "M-META-FIT-ROW-UNGROUPED",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
-			"method": "fitRowWrapExpr",
+			"method": "fitSegCloseExpr",
 			"force": "macro {}",
 			"note": "the soft lines of a fit row answer no group of their own, so a fitting row of simple metadata breaks one per line"
 		},
@@ -2846,17 +2846,25 @@
 			"name": "M-META-FIT-ROW-NEVER-BREAKS",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitSepExpr",
-			"find": "_metaFit == 2 ? _dl() : _dt(' ')",
-			"replace": "_dt(' ')",
-			"note": "a fit row joins its metadata with plain spaces, so a row past the maximum stays one line"
+			"find": "? _dl() : _dhl())",
+			"replace": "? _dt(' ') : _dhl())",
+			"note": "a fit row of short metadata joins them with plain spaces, so a row past the maximum stays one line"
+		},
+		{
+			"name": "M-META-FIT-SEG-ALL-SHORT-ONLY",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitSegCloseExpr",
+			"find": "_metaFit == 2 && $at > 0",
+			"replace": "_metaFit == 2 && !_metaShort.contains(false) && $at > 0",
+			"note": "only a run of short metadata alone is grouped, so the short neighbours beside a long or call-bearing metadata are never measured against the line width"
 		},
 		{
 			"name": "M-META-FIT-ROW-GLUES",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitDecls",
-			"find": "($arr.length == 1 ? ($loneBreak ? 0 : 1) : 2)",
+			"find": "($arr.length == 1 ? ($test && !$loneBreak ? 1 : 0) : 2)",
 			"replace": "1",
-			"note": "several simple metadata are read as one, so a fitting run glues to the declaration"
+			"note": "a run of several metadata is read as one simple metadata, so a complex one glues with its run to the declaration"
 		},
 		{
 			"name": "M-META-FIT-CHAIN-BREAKS",
@@ -2870,8 +2878,8 @@
 			"name": "M-META-FIT-COMMENT-IGNORED",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "decisionDecls",
-			"find": "|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);",
-			"replace": "|| false;",
+			"find": "|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null),",
+			"replace": "|| false,",
 			"note": "a comment inside a metadata run no longer breaks it, so fit lays a commented run out by width"
 		},
 		{
@@ -3659,12 +3667,12 @@
 			"note": "a metadata run never reads the inline cap, so a lone simple metadata wider than it stays on the declaration's line"
 		},
 		{
-			"name": "M-META-INLINE-MAX-ROW-CAPPED",
+			"name": "M-META-INLINE-MAX-SHORT-UNCAPPED",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
-			"method": "fitInlineCapExpr",
-			"find": "_metaFit == 1 && $wide",
-			"replace": "$wide",
-			"note": "the inline cap also measures a row of several simple metadata, which then breaks one per line"
+			"method": "shortExpr",
+			"find": "return wide == null ? test : macro $test && !$wide;",
+			"replace": "return test;",
+			"note": "the inline cap no longer measures the metadata of a run, so one wider than the cap still shares a line with its short neighbours"
 		},
 		{
 			"name": "M-META-INLINE-MAX-OFF-BY-ONE",
@@ -3957,7 +3965,7 @@
 			"name": "M-META-OWN-LINE-FIT",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "ownLineExpr",
-			"find": "_metaFit != 1;",
+			"find": "!(_metaFit == 1 || _metaLastGlues && !_metaShort.contains(false));",
 			"replace": "true;",
 			"note": "a lone simple annotation fit joins to its declaration's line still counts as standing on its own line"
 		},
@@ -4005,15 +4013,15 @@
 			"name": "M-COND-MOD-GLUE-TRIVIA-UNWIRED",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "decisionDecls",
-			"find": "broken, loneBreak)",
-			"replace": "broken, macro false)",
+			"find": "loneBreak: loneBreakExpr(field, root, true, fieldAccess, 0),",
+			"replace": "loneBreak: macro false,",
 			"note": "the trivia writer no longer asks the lone-break predicate"
 		},
 		{
 			"name": "M-COND-MOD-GLUE-FIT-IGNORES-BREAK",
 			"type": "anyparse.macro.WriterMetaLineEndLowering",
 			"method": "fitDecls",
-			"find": "($loneBreak ? 0 : 1)",
+			"find": "($test && !$loneBreak ? 1 : 0)",
 			"replace": "1",
 			"note": "the Fit decision keeps a lone metadata's line whatever the lone-break predicate says"
 		},
@@ -4021,9 +4029,72 @@
 			"name": "M-COND-MOD-GLUE-PLAIN-UNWIRED",
 			"type": "anyparse.macro.WriterStarPadLowering",
 			"method": "emitTryparseRunEmit",
-			"find": "WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess)",
+			"find": "WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess, 0)",
 			"replace": "macro false",
 			"note": "the plain writer no longer asks the lone-break predicate"
+		},
+		{
+			"name": "M-META-FIT-SHORT-PAIR-JOINS",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitSepExpr",
+			"find": "_dhl()) : _dt(' ')",
+			"replace": "_dt(' ')) : _dt(' ')",
+			"note": "a long metadata of a fit run shares its line with its neighbours, so it no longer stands alone"
+		},
+		{
+			"name": "M-META-FIT-LAST-NEVER-GLUES",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitDecls",
+			"find": "expr: macro _metaFit == 2\n\t\t\t\t\t&& _metaShort[_metaShort.length - 1]\n\t\t\t\t\t&& !(_metaShort[_metaShort.length - 2] ? $runBreak : $loneBreak),",
+			"replace": "expr: macro false,",
+			"note": "the short last metadata of a fit run of several always takes a line above the declaration"
+		},
+		{
+			"name": "M-META-FIT-RUN-BREAK-UNWIRED",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "decisionDecls",
+			"find": "runBreak: loneBreakExpr(field, root, true, fieldAccess, 1),",
+			"replace": "runBreak: macro false,",
+			"note": "the trivia writer no longer asks the run-break predicate, so a run's last short metadata rides a conditional modifier region"
+		},
+		{
+			"name": "M-META-FIT-PLAIN-SHORT-UNWIRED",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparseRunEmit",
+			"find": "short: WriterMetaLineEndLowering.shortExpr(f.metaNode, f.rootTypePath, f.trivia, macro _t, elemDoc)",
+			"replace": "short: macro false",
+			"note": "the plain writer reads no metadata of a run as short, so a run of short ones breaks one per line"
+		},
+		{
+			"name": "M-META-FIT-PLAIN-RUN-BREAK-UNWIRED",
+			"type": "anyparse.macro.WriterStarPadLowering",
+			"method": "emitTryparseRunEmit",
+			"find": "runBreak: WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess, 1),",
+			"replace": "runBreak: macro false,",
+			"note": "the plain writer no longer asks the run-break predicate, so a run's last short metadata rides a conditional modifier region"
+		},
+		{
+			"name": "M-META-FIT-ALONE-LAST-RUN-BREAK",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitDecls",
+			"find": "? $runBreak : $loneBreak)",
+			"replace": "? $runBreak : $runBreak)",
+			"note": "a run's short last metadata alone on its line after a long one answers the run-break predicate, so it never rides a simple region"
+		},
+		{
+			"name": "M-META-FIT-ALONE-LAST-IGNORES-COMPLEX",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitDecls",
+			"find": "? $runBreak : $loneBreak)",
+			"replace": "? $runBreak : false)",
+			"note": "a run's short last metadata alone on its line after a long one rides any region, a complex one included"
+		},
+		{
+			"name": "M-META-FIT-KEEPS-LINE-LONE-ONLY",
+			"type": "anyparse.macro.WriterMetaLineEndLowering",
+			"method": "fitKeepsLineExpr",
+			"force": "macro (_metaFit == 1)",
+			"note": "only a lone simple metadata keeps the declaration's line, so the short last one of a run breaks above it"
 		}
 	]
 }

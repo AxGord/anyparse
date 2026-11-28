@@ -115,20 +115,27 @@ final class WriterStarPadLowering {
 		);
 		final nextGlued: Expr = glueTest ?? macro false;
 		final metaPolicy: Null<Expr> = f.metaPolicy;
+		final elemDoc: Expr = { expr: ECall(macro $i{c.elemFn}, [macro _t, macro opt]), pos: Context.currentPos() };
 		final policyDecl: Expr = metaPolicy == null
 			? macro {}
 			: WriterMetaLineEndLowering.fitDecls(
-				WriterMetaLineEndLowering.simplePred(f.metaNode, f.rootTypePath, f.trivia), metaPolicy, macro _arr, e -> e, macro false,
-				WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess)
+				WriterMetaLineEndLowering.simplePred(f.metaNode, f.rootTypePath, f.trivia), metaPolicy, macro _arr, e -> e,
+				{
+					broken: macro false,
+					loneBreak: WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess, 0),
+					runBreak: WriterMetaLineEndLowering.loneBreakExpr(f.metaNode, f.rootTypePath, f.trivia, fieldAccess, 1),
+					short: WriterMetaLineEndLowering.shortExpr(f.metaNode, f.rootTypePath, f.trivia, macro _t, elemDoc)
+				}
 			);
-		final fitSep: Expr = WriterMetaLineEndLowering.fitSepExpr();
+		final fitSep: Expr = WriterMetaLineEndLowering.fitSepExpr(macro _si, macro _si + 1);
 		final elemSep: Expr = metaPolicy == null
 			? macro _dt(' ')
 			: macro (_metaPolicy == anyparse.format.MetadataLineEndPolicy.After ? _dhl() : $fitSep);
-		final rowWrap: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitRowWrapExpr(macro 0);
 		final fitAfterLast: Expr = WriterMetaLineEndLowering.fitAfterLastExpr();
 		final inlineCap: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitInlineCapExpr(f.metaNode, macro _elem);
 		final loneDoc: Expr = metaPolicy == null ? macro _elem : WriterMetaLineEndLowering.fitLoneDocExpr(macro _elem);
+		final segOpen: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitSegOpenExpr(macro _si);
+		final segClose: Expr = metaPolicy == null ? macro {} : WriterMetaLineEndLowering.fitSegCloseExpr(macro _si);
 		final afterLast: Expr = metaPolicy == null ? macro {} : macro if (
 			_metaPolicy != anyparse.format.MetadataLineEndPolicy.None && _arr.length > 0
 		)
@@ -141,11 +148,12 @@ final class WriterStarPadLowering {
 			while (_si < _arr.length) {
 				final _elem: anyparse.core.Doc = $elemCall;
 				$inlineCap;
+				$segOpen;
 				_docs.push($loneDoc);
+				$segClose;
 				if (_si < _arr.length - 1 && !$nextGlued) _docs.push($elemSep);
 				_si++;
 			}
-			$rowWrap;
 			$afterLast;
 			_dc(_docs);
 		});

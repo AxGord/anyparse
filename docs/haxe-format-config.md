@@ -735,10 +735,11 @@ of its own above the declaration (one annotation on a line above it is enough) i
 blank lines as a doc-commented member:
 `beforeDocCommentEmptyLines`, `afterFieldsWithDocComments` and `beginTypeIfDocComments` /
 `endTypeIfDocComments` fire on it. Metadata kept on the declaration's line leaves a plain member:
-under `lineEnds.metadata*` `none` the source's breaks decide, under `fit` a lone simple annotation
-counts as joined (even where a long line breaks it at render), every other value breaks after the
-run. A member with both a doc comment and metadata takes one blank line, not two; a `#if` member
-counts only by its doc comment. The `member-order` check reads the same keys
+under `lineEnds.metadata*` `none` the source's breaks decide, under `fit` a lone simple annotation,
+and a run whose every annotation is short, counts as joined (even where a long line breaks it at
+render), while a long annotation of a run stands above; every other value breaks after the run. A
+member with both a doc comment and metadata takes one blank line, not two; a `#if` member counts
+only by its doc comment. The `member-order` check reads the same keys
 (`MemberGapPolicy.forKind`) and the metadata's line as the source stands. Runtime:
 `WriterTriviaStarDispatch.docLedReads`, the line-end verdict `WriterMetaLineEndLowering.ownLineExpr`.
 

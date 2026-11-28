@@ -45,7 +45,7 @@ typedef HxAnonMember = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'), metaLineEndIfCtor('field', 'metadataVarLineEnd', 'VarField', 'FinalField'),
 		metaLineEndIfCtor('field', 'metadataFunctionLineEnd', 'FnField'))
 	var meta: Array<HxMetadata>;

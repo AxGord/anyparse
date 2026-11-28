@@ -78,6 +78,9 @@ final class HxAstPredLowering extends AstPredLowering {
 	/** Generated helpers of `metadataIsSimple`: a metadata argument's verdict, a dotted path, a plain single-quoted string. */
 	private static final META_ARG_IS_SIMPLE: String = '_metaArgIsSimple';
 
+	/** The argument verdict of `metadataIsShort`: `_metaArgIsSimple` with no call. */
+	private static final META_ARG_IS_PLAIN: String = '_metaArgIsPlain';
+
 	private static final EXPR_IS_PATH: String = '_exprIsPath';
 	private static final INTERP_STRING_IS_PLAIN: String = '_interpStringIsPlain';
 
@@ -350,9 +353,20 @@ final class HxAstPredLowering extends AstPredLowering {
 			fnBodyEmptyField('fnExprBodyEmpty', HX_FN_EXPR_BODY, []),
 			memberBeyondValueField(),
 			abstractBodyBeyondValuesField(),
-			metadataIsSimpleField(),
-			metaArgIsSimpleField(),
+			metadataIsSimpleField(
+				'metadataIsSimple', META_ARG_IS_SIMPLE,
+				'True iff a metadata takes no argument, or one literal, identifier, dotted path or operator over them.'
+			),
+			metadataIsSimpleField(
+				'metadataIsShort', META_ARG_IS_PLAIN,
+				'True iff a metadata takes no argument, or one literal, identifier, dotted path or operator over them, with no call.'
+			),
+			metaArgIsSimpleField(META_ARG_IS_SIMPLE, true),
+			metaArgIsSimpleField(META_ARG_IS_PLAIN, false),
 			modifiersLeadWithComplexRegionField(),
+			modifiersLeadWithRegionField(
+				'modifiersLeadWithRegion', macro true, 'True iff a member\'s modifiers open with a conditional region.'
+			),
 			exprIsPathField(),
 			interpStringIsPlainField()
 		].concat(new HxCasePredLowering(_shape, _mode).generate());
@@ -1243,61 +1257,59 @@ final class HxAstPredLowering extends AstPredLowering {
 	}
 
 	/**
-	 * `metadataIsSimple(m)`: no argument, or exactly one that is a literal, a dotted path or an operator over them — the
-	 * metadata the `Fit` line-end policy may place by width alone. A raw `PlainMeta` and a `#if` region are never simple.
+	 * `name(m)`: no argument, or exactly one the argument predicate `argPred` accepts. `metadataIsSimple` (calls of a path
+	 * allowed) is the metadata the `Fit` line-end policy may place by width alone; `metadataIsShort` (no call) the one that
+	 * may join other metadata on a line. A raw `PlainMeta` and a `#if` region are neither.
 	 */
-	private function metadataIsSimpleField(): Field {
+	private function metadataIsSimpleField(name: String, argPred: String, doc: String): Field {
 		final args: Expr = field(ident('_c'), 'args');
 		final first: Expr = starElem(HX_META_CALL_ARGS, 'args', macro $args[0]);
-		final argSimple: Expr = { expr: ECall(ident(META_ARG_IS_SIMPLE), [first]), pos: Context.currentPos() };
+		final argSimple: Expr = { expr: ECall(ident(argPred), [first]), pos: Context.currentPos() };
 		final body: Expr = nullSwitch(ident('m'), macro false, [
 			caseOf(HX_METADATA, ['Meta'], macro true),
 			caseBind(HX_METADATA, 'MetaCall', [0 => '_c'], macro $args.length == 0 || $args.length == 1 && $argSimple)
 		], macro false);
-		return predField(
-			'metadataIsSimple', [valueArg('m', HX_METADATA)],
-			macro : Bool, body, 'True iff a metadata takes no argument, or one literal, identifier, dotted path or operator over them.'
-		);
+		return predField(name, [valueArg('m', HX_METADATA)], macro : Bool, body, doc);
 	}
 
 	/**
 	 * A metadata argument is simple when it is a number, `true`/`false`/`null`, a one-line plain string, a dotted path, or a
-	 * prefix or binary operator over simple operands (`@:op(A + B)`, `@:op(-A)`), or a call of a dotted path over simple
-	 * arguments (`@:op(a())`). The operator constructors are read off the
-	 * grammar's own `@:prefix` / `@:infix` annotations, so no operator table can drift from it.
+	 * prefix or binary operator over simple operands (`@:op(A + B)`, `@:op(-A)`), and, when `calls` holds, a call of a dotted
+	 * path over simple arguments (`@:op(a())`). The operator constructors are read off the grammar's own `@:prefix` /
+	 * `@:infix` annotations, so no operator table can drift from it.
 	 */
-	private function metaArgIsSimpleField(): Field {
+	private function metaArgIsSimpleField(name: String, calls: Bool): Field {
 		final exprRule: ShapeNode = _shape.rules[HX_EXPR] ?? Context.fatalError(
 			'HxAstPredLowering: $HX_EXPR is not a rule', Context.currentPos()
 		);
 		final path: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('e')]), pos: Context.currentPos() };
 		final plain: Expr = { expr: ECall(ident(INTERP_STRING_IS_PLAIN), [ident('_s')]), pos: Context.currentPos() };
-		final operand: String -> Expr = name -> { expr: ECall(ident(META_ARG_IS_SIMPLE), [ident(name)]), pos: Context.currentPos() };
-		final callee: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('_f')]), pos: Context.currentPos() };
-		final operandOf: Expr -> Expr = arg -> { expr: ECall(ident(META_ARG_IS_SIMPLE), [arg]), pos: Context.currentPos() };
+		final operandOf: Expr -> Expr = arg -> { expr: ECall(ident(name), [arg]), pos: Context.currentPos() };
 		final cases: Array<Case> = [
 			caseOf(HX_EXPR, ['IntLit', 'FloatLit', 'HexLit', 'BoolLit', 'NullLit'], macro true),
 			caseBind(HX_EXPR, 'DoubleStringExpr', [0 => '_d'], macro !StringTools.contains(_d, '\n')),
-			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain),
-			caseBind(
+			caseBind(HX_EXPR, 'SingleStringExpr', [0 => '_s'], plain)
+		];
+		if (calls) {
+			final callee: Expr = { expr: ECall(ident(EXPR_IS_PATH), [ident('_f')]), pos: Context.currentPos() };
+			cases.push(caseBind(
 				HX_EXPR, 'Call', [0 => '_f', 1 => '_a'],
 				macro $callee && Lambda.foreach(_a, _x -> ${operandOf(ctorStarElem(HX_EXPR, 'Call', macro _x))})
-			)
-		];
+			));
+		}
 		for (branch in exprRule.children) {
 			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (branch.children.filter(c -> c.annotations.get(AnnotationKeys.BASE_REF) != HX_EXPR).length > 0) continue;
 			if (MetaInspect.hasMeta(branch, ':infix'))
-				cases.push(caseBind(HX_EXPR, ctor, [0 => '_l', 1 => '_r'], macro ${operand('_l')} && ${operand('_r')}));
+				cases.push(caseBind(HX_EXPR, ctor, [0 => '_l', 1 => '_r'], macro ${operandOf(ident('_l'))} && ${operandOf(ident('_r'))}));
 			else if (MetaInspect.hasMeta(branch, ':prefix'))
-				cases.push(caseBind(HX_EXPR, ctor, [0 => '_o'], operand('_o')));
+				cases.push(caseBind(HX_EXPR, ctor, [0 => '_o'], operandOf(ident('_o'))));
 		}
-		return predField(
-			META_ARG_IS_SIMPLE, [valueArg('e', HX_EXPR)],
-			macro : Bool, nullSwitch(ident('e'), macro false, cases, path),
-			'True iff a metadata argument is a literal, a dotted path, an operator over simple operands or a call of a path over simple '
-			+ 'arguments.'
-		);
+		final doc: String = calls
+			? 'True iff a metadata argument is a literal, a dotted path, an operator over simple operands or a call of a path over simple '
+				+ 'arguments.'
+			: 'True iff a metadata argument is a literal, a dotted path or an operator over such operands, with no call.';
+		return predField(name, [valueArg('e', HX_EXPR)], macro : Bool, nullSwitch(ident('e'), macro false, cases, path), doc);
 	}
 
 	/**
@@ -1311,7 +1323,6 @@ final class HxAstPredLowering extends AstPredLowering {
 		// A comment is a trivia slot of the element, so it exists only where the Star's elements carry trivia.
 		final uncommented: (Expr, String) -> Expr = (elem, fieldName) ->
 			starElemWrapped(inner, fieldName) ? macro $elem.leadingComments.length == 0 && $elem.trailingComment == null : macro true;
-		final first: Expr = starElem(HX_MEMBER_DECL, 'modifiers', macro m.modifiers[0]);
 		final ifElem: Expr = starElem(inner, 'body', macro _i.body[0]);
 		final elseElem: Expr = starElem(inner, 'elseBody', macro _e[0]);
 		final ifKeyword: Expr = nullSwitch(ifElem, macro false, [caseOf(prefix, ['Conditional', 'Meta'], macro false)], macro true);
@@ -1329,16 +1340,24 @@ final class HxAstPredLowering extends AstPredLowering {
 		final simple: Expr = macro _i.elseifs.length == 0
 			&& anyparse.grammar.haxe.cond.HxCondExprReader.isOneTest(_i.cond)
 			&& _i.body.length == 1 && $ifKeyword && $ifClean && $elseSimple;
-		final region: Expr = nullSwitch(
-			first, macro false,
-			[caseBind(HX_MEMBER_MODIFIER, CONDITIONAL_CTOR, [0 => '_i'], macro !$simple)],
-			macro false
-		);
-		return predField(
-			'modifiersLeadWithComplexRegion', [valueArg('m', HX_MEMBER_DECL)],
-			macro : Bool, macro m != null && m.modifiers.length > 0 && $region,
+		return modifiersLeadWithRegionField(
+			'modifiersLeadWithComplexRegion', macro !$simple,
 			'True iff a member\'s modifiers open with a conditional region of more than one test, branch or element, or with a comment.'
 		);
+	}
+
+	/**
+	 * `name(m)`: a member's modifiers open with a conditional region `_i` for which `test` holds. `modifiersLeadWithRegion`
+	 * (any region) keeps a short metadata that shares its line with another one off such a region's line under `Fit`.
+	 */
+	private function modifiersLeadWithRegionField(name: String, test: Expr, doc: String): Field {
+		final first: Expr = starElem(HX_MEMBER_DECL, 'modifiers', macro m.modifiers[0]);
+		final region: Expr = nullSwitch(
+			first, macro false,
+			[caseBind(HX_MEMBER_MODIFIER, CONDITIONAL_CTOR, [0 => '_i'], test)],
+			macro false
+		);
+		return predField(name, [valueArg('m', HX_MEMBER_DECL)], macro : Bool, macro m != null && m.modifiers.length > 0 && $region, doc);
 	}
 
 	private function exprIsPathField(): Field {

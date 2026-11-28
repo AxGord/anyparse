@@ -359,7 +359,7 @@
 			"name": "M-META-FIT-OPERANDS-UNREAD",
 			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
 			"method": "metaArgIsSimpleField",
-			"find": "macro ${operand('_l')} && ${operand('_r')}",
+			"find": "macro ${operandOf(ident('_l'))} && ${operandOf(ident('_r'))}",
 			"replace": "macro true",
 			"note": "a binary operator argument is simple whatever its operands, so an operator over a call joins the declaration's line"
 		},
@@ -450,6 +450,14 @@
 			"find": "macro $elem.leadingComments.length == 0 && $elem.trailingComment == null",
 			"replace": "macro true",
 			"note": "a comment inside the region no longer makes it complex"
+		},
+		{
+			"name": "M-META-SHORT-CALL-ALLOWED",
+			"type": "anyparse.grammar.haxe.glue.HxAstPredLowering",
+			"method": "generate",
+			"find": "metaArgIsSimpleField(META_ARG_IS_PLAIN, false)",
+			"replace": "metaArgIsSimpleField(META_ARG_IS_PLAIN, true)",
+			"note": "a call-bearing metadata reads as short, so it shares a line with the short metadata after it"
 		}
 	]
 }

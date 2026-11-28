@@ -40,16 +40,16 @@ import anyparse.grammar.haxe.meta.HxMetadata;
  *
  * `metaLineEndBreakIf('modifiersLeadWithComplexRegion')`: under `Fit` a lone simple metadata shares
  * its line with a conditional modifier region after it only when the region is simple (one test, no
- * `#elseif`, one keyword per branch, a simple metadata allowed in `#else`); any other region sends
- * the metadata to a line of its own.
+ * `#elseif`, one keyword per branch, a simple metadata allowed in `#else`); any other region sends the
+ * metadata to a line of its own, as `modifiersLeadWithRegion` does any region after two metadata on one line.
  */
 @:peg
 typedef HxMemberDecl = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'),
-		metaLineEndBreakIf('modifiersLeadWithComplexRegion'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'),
+		metaLineEndBreakIf('modifiersLeadWithComplexRegion', 'modifiersLeadWithRegion'))
 	@:fmt(metaLineEndPolicy('metadataOtherLineEnd'),
 		metaLineEndIfCtor('member', 'metadataVarLineEnd', 'VarMember', 'FinalMember', 'VarSemiCondInitMember'),
 		metaLineEndIfCtor('member', 'metadataFunctionLineEnd', 'FnMember', 'FinalModifiedMember', 'CondNameFnMember', 'CondSigFnMember'))

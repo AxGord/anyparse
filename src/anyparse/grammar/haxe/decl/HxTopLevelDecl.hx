@@ -45,7 +45,7 @@ typedef HxTopLevelDecl = {
 
 	@:trivia
 	@:tryparse
-	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndInlineMax('metadataInlineMaxLength'))
+	@:fmt(metaLineEndSimple('metadataIsSimple'), metaLineEndShort('metadataIsShort'), metaLineEndInlineMax('metadataInlineMaxLength'))
 	@:fmt(metaLineEndPolicy('metadataTypeLineEnd'), metaLineEndIfCtor('decl', 'metadataVarLineEnd', 'VarDecl'),
 		metaLineEndIfCtor('decl', 'metadataFunctionLineEnd', 'FnDecl'))
 	var meta: Array<HxMetadata>;

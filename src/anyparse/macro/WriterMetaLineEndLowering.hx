@@ -13,6 +13,17 @@ using Lambda;
  */
 typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
 /**
+ * The runtime tests `WriterMetaLineEndLowering.fitDecls` reads off a metadata run: whether it holds a comment (`broken`),
+ * whether a lone element breaks all the same (`loneBreak`), whether the last short element of several does (`runBreak`),
+ * and whether the element bound as `_t` is short (`short`).
+ */
+typedef FitRunTests = {
+	final broken: Expr;
+	final loneBreak: Expr;
+	final runBreak: Expr;
+	final short: Expr;
+}
+/**
  * Pass 3W — the one answer to "which line-end policy governs this metadata run".
  *
  * `@:fmt(metaLineEndPolicy('<optField>'))` names the knob of a metadata Star.
@@ -23,37 +34,46 @@ typedef ChainWalk = { final decls: Array<Expr>; final pattern: Expr; }
  * annotations are built from. `@:fmt(metaLineEndSimple('<predicate>'))` names the generated AST
  * predicate that tells a simple annotation, which the `Fit` policy may place by width; a chain names
  * the wrapper's annotation field after it. A site that names none has no simple annotation.
+ * `@:fmt(metaLineEndShort('<predicate>'))` names the predicate of a short annotation, one that may share a line with
+ * its neighbours in a run of several under `Fit`; a site that names none has none.
  * `@:fmt(metaLineEndInlineMax('<optField>'))` names the Int knob that caps the written width of a lone simple
- * annotation kept on its declaration's line; `0` is no cap, and so is a site that names none.
- * `@:fmt(metaLineEndBreakIf('<predicate>'))` names the generated predicate over the struct holding the run that sends
- * a lone simple annotation to a line of its own all the same, for a sibling whose head may not share its line.
+ * annotation kept on its declaration's line, and of a short one; `0` is no cap, and so is a site that names none.
+ * `@:fmt(metaLineEndBreakIf('<lone>'[, '<run>']))` names the generated predicates over the struct holding the run that
+ * send a lone simple annotation, and the last short one of a run of several, to a line of their own all the same, for a
+ * sibling whose head may not share its line.
  */
 @:access(anyparse.macro.WriterCtorPatternLowering, anyparse.macro.WriterLoweringSupport)
 final class WriterMetaLineEndLowering {
 
 	private static final SIMPLE_META: String = 'metaLineEndSimple';
 	private static final CHAIN_META: String = 'metaLineEndChain';
+	private static final SHORT_META: String = 'metaLineEndShort';
 	private static final INLINE_MAX_META: String = 'metaLineEndInlineMax';
 	private static final LONE_BREAK_META: String = 'metaLineEndBreakIf';
 	private static final TRIVIA_META: String = ':trivia';
 
 	/**
-	 * The runtime locals of a metadata run under its knob `raw`: `_metaFit` is `1` for one simple element, which
-	 * keeps the declaration's line when that line fits, `2` for several, which share one row of their own when it
-	 * fits, and `0` otherwise; `_metaPolicy` is the knob with `Fit` read as `After` (when `_metaFit` is `0`) or `AfterLast`. A run
-	 * holding a comment (`broken`) is never fit: its row breaks as under `After`; so is a lone element when `loneBreak`
-	 * (`loneBreakExpr`'s answer) holds. `pred` is `simplePred`'s answer.
+	 * The runtime locals of a metadata run under its knob `raw`: `_metaFit` is `1` for one simple element, which keeps the
+	 * declaration's line when that line fits, `2` for several, and `0` otherwise; `_metaPolicy` is the knob with `Fit` read
+	 * as `After` (when `_metaFit` is `0`) or `AfterLast`. In a run of several, `_metaShort` holds each element's
+	 * `tests.short`: two short neighbours share a line, their segment one group from `_metaSegAt` on, any other pair breaks,
+	 * and `_metaLastGlues` tells that a short last element keeps the declaration's line, unless `tests.runBreak` holds when
+	 * it shares its line with a short one before it, or `tests.loneBreak` when it stands alone. A run holding a comment
+	 * (`tests.broken`) is never fit, nor is a lone element when `tests.loneBreak` holds. `pred` is `simplePred`'s answer.
 	 * `_metaFit` stays assignable for `fitInlineCapExpr`, which reads the element once it is written.
 	 */
-	public static function fitDecls(pred: Null<Expr>, raw: Expr, arr: Expr, elemNode: Expr -> Expr, broken: Expr, loneBreak: Expr): Expr {
+	public static function fitDecls(pred: Null<Expr>, raw: Expr, arr: Expr, elemNode: Expr -> Expr, tests: FitRunTests): Expr {
 		final pos: Position = Context.currentPos();
+		final broken: Expr = tests.broken;
+		final loneBreak: Expr = tests.loneBreak;
+		final runBreak: Expr = tests.runBreak;
+		final short: Expr = tests.short;
 		final fit: Expr = if (pred == null) {
 			macro 0;
 		} else {
-			final test: Expr = { expr: ECall(pred, [elemNode(macro _fe)]), pos: pos };
+			final test: Expr = { expr: ECall(pred, [elemNode(macro $arr[0])]), pos: pos };
 			macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit && $arr.length > 0 && !$broken
-				&& !Lambda.exists($arr, _fe -> !$test)
-				? ($arr.length == 1 ? ($loneBreak ? 0 : 1) : 2)
+				? ($arr.length == 1 ? ($test && !$loneBreak ? 1 : 0) : 2)
 				: 0;
 		};
 		final policy: Expr = macro _metaRaw == anyparse.format.MetadataLineEndPolicy.Fit
@@ -77,6 +97,26 @@ final class WriterMetaLineEndLowering {
 					name: '_metaPolicy',
 					type: macro : Int,
 					expr: policy,
+					isFinal: true
+				},
+				{
+					name: '_metaShort',
+					type: macro : Array<Bool>,
+					expr: macro _metaFit == 2 ? [ for (_t in $arr) $short ] : [],
+					isFinal: true
+				},
+				{
+					name: '_metaSegAt',
+					type: macro : Int,
+					expr: macro 0,
+					isFinal: false
+				},
+				{
+					name: '_metaLastGlues',
+					type: macro : Bool,
+					expr: macro _metaFit == 2
+					&& _metaShort[_metaShort.length - 1]
+					&& !(_metaShort[_metaShort.length - 2] ? $runBreak : $loneBreak),
 					isFinal: true
 				}
 			]),
@@ -104,9 +144,35 @@ final class WriterMetaLineEndLowering {
 			: $elemDoc;
 	}
 
-	/** The separator between two elements of a run that does not break after each: a soft line inside a `Fit` row. */
-	public static function fitSepExpr(): Expr {
-		return macro (_metaFit == 2 ? _dl() : _dt(' '));
+	/**
+	 * The separator between the elements at `prev` and `next` of a run that does not break after each: in a `Fit` run of
+	 * several two short neighbours are joined by a soft line, which the group `fitSegCloseExpr` makes of their segment
+	 * measures, and any other pair breaks.
+	 */
+	public static function fitSepExpr(prev: Expr, next: Expr): Expr {
+		return macro (_metaFit == 2 ? (_metaShort[$prev] && _metaShort[$next] ? _dl() : _dhl()) : _dt(' '));
+	}
+
+	/**
+	 * Marks where the element at `at` opens a segment of short neighbours in a `Fit` run of several. Spliced after the
+	 * separator before it, so a segment's group never holds the break that sets it apart.
+	 */
+	public static function fitSegOpenExpr(at: Expr): Expr {
+		return macro if (_metaFit == 2 && _metaShort[$at] && ($at == 0 || !_metaShort[$at - 1])) _metaSegAt = _docs.length;
+	}
+
+	/**
+	 * Wraps the segment of short neighbours that the element at `at` closes in one group, spliced after that element is
+	 * pushed: the segment is one line when it fits, else one metadata per line, in a run of short ones only as beside a
+	 * long or call-bearing one.
+	 */
+	public static function fitSegCloseExpr(at: Expr): Expr {
+		return macro if (
+			_metaFit == 2 && $at > 0 && _metaShort[$at] && _metaShort[$at - 1] && ($at == _arr.length - 1 || !_metaShort[$at + 1])
+		) {
+			final _seg: Array<anyparse.core.Doc> = _docs.splice(_metaSegAt, _docs.length - _metaSegAt);
+			_docs.push(_dg(_dc(_seg)));
+		};
 	}
 
 	/**
@@ -118,17 +184,14 @@ final class WriterMetaLineEndLowering {
 		return inDecl ? macro false : macro _metaPolicy == anyparse.format.MetadataLineEndPolicy.None && $newlineBefore;
 	}
 
-	/** The break after a run's last element: a lone simple one under `Fit` stays on the line it fits. */
+	/** The break after a run's last element: one that keeps the declaration's line under `Fit` stays on it when it fits. */
 	public static function fitAfterLastExpr(): Expr {
-		return macro (_metaFit == 1 ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl());
+		return macro (${fitKeepsLineExpr()} ? _dfle(opt.lineWidth + 1, _dhl(), _dt(' ')) : _dhl());
 	}
 
-	/** Wraps `_docs` from `from` on in one group when the run is a `Fit` row: it stays one line when it fits, else one per line. */
-	public static function fitRowWrapExpr(from: Expr): Expr {
-		return macro if (_metaFit == 2) {
-			final _row: Array<anyparse.core.Doc> = _docs.splice($from, _docs.length - $from);
-			_docs.push(_dg(_dc(_row)));
-		};
+	/** Whether a run's last element keeps the declaration's line under `Fit`: a lone simple one, or a short last of several. */
+	public static function fitKeepsLineExpr(): Expr {
+		return macro (_metaFit == 1 || _metaLastGlues);
 	}
 
 	/**
@@ -273,18 +336,35 @@ final class WriterMetaLineEndLowering {
 	}
 
 	/**
-	 * Whether a lone simple element of the run read by `fieldAccess` breaks as under `After` all the same: the call of the
-	 * predicate `@:fmt(metaLineEndBreakIf('<pred>'))` names, over the struct holding the run; `macro false` when it names none.
+	 * Whether an element of the run read by `fieldAccess` that would keep its declaration's line breaks as under `After` all
+	 * the same: the call of the `at`-th predicate `@:fmt(metaLineEndBreakIf('<lone>', '<run>'))` names (`0` for a lone simple
+	 * element, `1` for the last short one of several), over the struct holding the run; `macro false` when it names none.
 	 */
-	public static function loneBreakExpr(field: ShapeNode, rootTypePath: String, trivia: Bool, fieldAccess: Expr): Expr {
+	public static function loneBreakExpr(field: ShapeNode, rootTypePath: String, trivia: Bool, fieldAccess: Expr, at: Int): Expr {
 		final names: Null<Array<String>> = MetaInspect.fmtReadStringArgs(field, LONE_BREAK_META);
-		if (names == null || names.length == 0) return macro false;
+		if (names == null || names.length <= at) return macro false;
 		final owner: Expr = switch fieldAccess.expr {
 			case EField(o, _): o;
 			case _:
 				Context.fatalError('WriterLowering: @:fmt($LONE_BREAK_META) needs a run read as a field of its struct', fieldAccess.pos);
 		};
-		return { expr: ECall(AstPredLowering.predFnExpr(rootTypePath, trivia, false, names[0]), [owner]), pos: fieldAccess.pos };
+		return { expr: ECall(AstPredLowering.predFnExpr(rootTypePath, trivia, false, names[at]), [owner]), pos: fieldAccess.pos };
+	}
+
+	/**
+	 * Whether the element `elemNode` of a run in `field`, written as `elemDoc`, is short: the predicate
+	 * `@:fmt(metaLineEndShort('<predicate>'))` names accepts it and its written width is within the field's inline cap.
+	 * `macro false` when the field names no such predicate or `elemDoc` is unknown.
+	 */
+	public static function shortExpr(field: ShapeNode, rootTypePath: String, trivia: Bool, elemNode: Expr, elemDoc: Null<Expr>): Expr {
+		final names: Null<Array<String>> = MetaInspect.fmtReadStringArgs(field, SHORT_META);
+		if (names == null || names.length == 0 || elemDoc == null) return macro false;
+		final test: Expr = {
+			expr: ECall(AstPredLowering.predFnExpr(rootTypePath, trivia, false, names[0]), [elemNode]),
+			pos: elemNode.pos
+		};
+		final wide: Null<Expr> = overInlineMaxExpr(field, elemDoc);
+		return wide == null ? test : macro $test && !$wide;
 	}
 
 	/**
@@ -314,7 +394,7 @@ final class WriterMetaLineEndLowering {
 	 * Whether the metadata run in the field `fieldName` of the struct `typePath`, read off `owner`, ends on a line of its own
 	 * above what it annotates, as this module's policy writes it: the one answer to "does a member's metadata stand on its own
 	 * line": one annotation of the run on a line above it is enough. `None`, and a site with no knob, keep the source's
-	 * breaks, inside the run and after it; `Fit` keeps a lone simple annotation on the
+	 * breaks, inside the run and after it; `Fit` keeps a lone simple annotation, and a run of short ones, on the
 	 * declaration's line, read as kept even where that line overflows at render; every other policy breaks after the run.
 	 * `null` when the field is no metadata run. `writeFnFor` names the writer of a rule, which measures a lone annotation
 	 * against its inline cap.
@@ -329,11 +409,12 @@ final class WriterMetaLineEndLowering {
 		final pos: Position = Context.currentPos();
 		final access: Expr = { expr: EField(owner, fieldName), pos: pos };
 		final trailLC: Expr = { expr: EField(owner, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX), pos: pos };
-		final decls: Expr = decisionDecls(ctx, field, typePath, access, macro _omArr, trailLC, owner);
 		final elemRef: Null<String> = field.children.length == 1 ? field.children[0].annotations[AnnotationKeys.BASE_REF] : null;
-		final cap: Expr = elemRef == null
-			? macro {}
-			: fitInlineCapExpr(field, { expr: ECall(macro $i{writeFnFor(elemRef)}, [macro _omArr[0].node, macro opt]), pos: pos });
+		final writeOf: Expr -> Null<Expr> = node ->
+			elemRef == null ? null : { expr: ECall(macro $i{writeFnFor(elemRef)}, [node, macro opt]), pos: pos };
+		final decls: Expr = decisionDecls(ctx, field, typePath, access, macro _omArr, trailLC, writeOf(macro _t.node), owner);
+		final firstDoc: Null<Expr> = writeOf(macro _omArr[0].node);
+		final cap: Expr = firstDoc == null ? macro {} : fitInlineCapExpr(field, firstDoc);
 		final nextBreak: Expr = nextFieldGapExpr(
 			rule, field, owner, pos, e -> macro $e.newlineBefore, TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, g -> g
 		);
@@ -348,20 +429,20 @@ final class WriterMetaLineEndLowering {
 			else if (_metaPolicy < 0 || _metaPolicy == anyparse.format.MetadataLineEndPolicy.None)
 				$sourceBreak;
 			else
-				_metaFit != 1;
+				!(_metaFit == 1 || _metaLastGlues && !_metaShort.contains(false));
 		};
 	}
 
 	/**
 	 * The `fitDecls` locals of the run `arr` in `field` of the struct `typePath`, reached as `fieldAccess`, with `trailLC` its
-	 * trailing comments: the one composition the run's writer and `ownLineExpr` both read, so the blank-line verdict decides
-	 * from the decision the writer makes. A run that annotates nothing answers `-2`, keeping its source layout with no break
-	 * owed after its last element; a run holding a comment, or followed by one before what it annotates, breaks as under
-	 * `After`. `owner` is `policyExpr`'s.
+	 * trailing comments and `elemDoc` the written doc of its element bound as `_t`: the one composition the run's writer and
+	 * `ownLineExpr` both read, so the blank-line verdict decides from the decision the writer makes. A run that annotates
+	 * nothing answers `-2`, keeping its source layout with no break owed after its last element; a run holding a comment, or
+	 * followed by one before what it annotates, breaks as under `After`. `owner` is `policyExpr`'s.
 	 */
 	public static function decisionDecls(
 		ctx: WriterCtorPatternLowering.CtorPatternCtx, field: ShapeNode, typePath: String, fieldAccess: Expr, arr: Expr, trailLC: Expr,
-		?owner: Expr
+		elemDoc: Null<Expr>, ?owner: Expr
 	): Expr {
 		final own: Null<Expr> = policyExpr(ctx, field, typePath, null, owner);
 		final annotates: Null<Expr> = own == null ? null : annotatesExpr(ctx, field, typePath, fieldAccess);
@@ -371,11 +452,15 @@ final class WriterMetaLineEndLowering {
 			own
 		else
 			macro ($annotates ? ($own: Int) : -2);
-		final broken: Expr = macro ${gapCommentExpr(ctx, field, typePath, fieldAccess)}
+		final root: String = ctx.shape.root;
+		return fitDecls(simplePred(field, root, true), raw, arr, e -> macro $e.node, {
+			broken: macro ${gapCommentExpr(ctx, field, typePath, fieldAccess)}
 			|| $trailLC.length > 0
-			|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null);
-		final loneBreak: Expr = loneBreakExpr(field, ctx.shape.root, true, fieldAccess);
-		return fitDecls(simplePred(field, ctx.shape.root, true), raw, arr, e -> macro $e.node, broken, loneBreak);
+			|| Lambda.exists($arr, _fe -> _fe.leadingComments.length > 0 || _fe.trailingComment != null),
+			loneBreak: loneBreakExpr(field, root, true, fieldAccess, 0),
+			runBreak: loneBreakExpr(field, root, true, fieldAccess, 1),
+			short: shortExpr(field, root, true, macro _t.node, elemDoc)
+		});
 	}
 
 	/** Whether the written `doc` of one annotation is wider than the cap `field` names, or `null` when it names none. */

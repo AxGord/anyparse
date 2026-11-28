@@ -108,11 +108,30 @@ class MetadataCondModifierFitTest extends Test {
 	}
 
 	/** After a run of two metadata even a simple region takes its own line: only a lone metadata is ridden. */
-	@:pin('guard')
+	@:pin('control')
+	@:killer('M-META-FIT-RUN-BREAK-UNWIRED', 'M-META-FIT-PLAIN-RUN-BREAK-UNWIRED')
 	public function testARunOfTwoMetadataLeavesTheRegionOnItsOwnLine(): Void {
 		Assert.equals(
 			'class C {\n\t@:a @:b\n\t#if sys extern #end\n\tfunction f():Void {}\n}\n',
 			fit('class C {\n\t@:a\n\t@:b #if sys extern #end\n\tfunction f():Void {}\n}\n')
+		);
+		Assert.equals(
+			'class C {\n\t@:a @:b\n\t#if sys extern #end function f():Void {}\n}\n',
+			plain('class C {\n\t@:a\n\t@:b #if sys extern #end function f():Void {}\n}\n')
+		);
+	}
+
+	/** A short metadata alone on its line after a long one is read as a lone one: it rides a simple region, never a complex one. */
+	@:pin('control')
+	@:killer('M-META-FIT-ALONE-LAST-RUN-BREAK', 'M-META-FIT-ALONE-LAST-IGNORES-COMPLEX')
+	public function testAShortMetadataAloneAfterALongOneRidesASimpleRegion(): Void {
+		Assert.equals(
+			'class C {\n\t@:build(a())\n\t@:op(A -= B) #if sys extern #end\n\tfunction f():Void {}\n\n\t@:build(a())\n\t@:op(A -= B)\n'
+			+ '\t#if (sys && !js) extern #end\n\tfunction g():Void {}\n}\n',
+			fit(
+				'class C {\n\t@:build(a()) @:op(A -= B) #if sys extern #end\n\tfunction f():Void {}\n\n'
+				+ '\t@:build(a()) @:op(A -= B) #if (sys && !js) extern #end\n\tfunction g():Void {}\n}\n'
+			)
 		);
 	}
 

@@ -58,23 +58,27 @@ class MetadataLineEndFitTest extends Test {
 		);
 	}
 
-	/** Several simple metadata that fit share one line of their own; they never join the declaration's line. */
+	/** Several short metadata that fit share the line of the declaration they annotate. */
 	@:pin('control')
-	@:killer('M-META-FIT-ROW-UNGROUPED', 'M-META-FIT-ROW-GLUES')
-	public function testSeveralSimpleMetadataShareOneRowAboveTheDeclaration(): Void {
+	@:killer('M-META-FIT-ROW-UNGROUPED', 'M-META-FIT-LAST-NEVER-GLUES', 'M-META-FIT-KEEPS-LINE-LONE-ONLY')
+	public function testSeveralShortMetadataJoinTheDeclarationLine(): Void {
 		Assert.equals(
-			'@:access(a.B) @:nullSafety(Strict)\nabstract class C {\n\t@:describe(\'text\') @:access(pkg.Type)\n\tfunction g() {}\n}\n',
-			fit('@:access(a.B) @:nullSafety(Strict) abstract class C {\n\t@:describe(\'text\') @:access(pkg.Type) function g() {}\n}\n')
+			'@:access(a.B) @:nullSafety(Strict) abstract class C {\n\t@:describe(\'text\') @:access(pkg.Type) function g() {}\n\n'
+			+ '\t@:nullSafety(Off) @:bindable public var x:Int;\n}\n',
+			fit(
+				'@:access(a.B)\n@:nullSafety(Strict)\nabstract class C {\n\t@:describe(\'text\') @:access(pkg.Type)\n\tfunction g() {}\n\n'
+				+ '\t@:nullSafety(Off) @:bindable public var x:Int;\n}\n'
+			)
 		);
 	}
 
-	/** Several simple metadata whose row passes the maximum go one per line. */
+	/** Several short metadata whose row passes the maximum go one per line; the last keeps the declaration's line. */
 	@:pin('control')
 	@:killer('M-META-FIT-ROW-NEVER-BREAKS')
 	public function testARowPastTheMaximumIsOneMetadataPerLine(): Void {
 		Assert.equals(
 			'@:access(some.very.long.package.path.TypeName)\n@:access(another.very.long.package.path.TypeName)\n'
-			+ '@:access(third.very.long.pkg.TypeNameLonger)\nclass C {}\n',
+			+ '@:access(third.very.long.pkg.TypeNameLonger) class C {}\n',
 			fit(
 				'@:access(some.very.long.package.path.TypeName) @:access(another.very.long.package.path.TypeName) '
 				+ '@:access(third.very.long.pkg.TypeNameLonger) class C {}\n'
@@ -82,18 +86,67 @@ class MetadataLineEndFitTest extends Test {
 		);
 	}
 
-	/** A call, several arguments, an object or a function in the arguments make a metadata complex: its run goes one per line. */
+	/**
+	 * A call, several arguments, an object or a function in the arguments make a metadata complex: it stands on its own line,
+	 * and a short metadata after it keeps the declaration's line.
+	 */
 	@:pin('control')
-	@:killer('M-META-FIT-ARGS-IGNORED')
-	public function testAComplexMetadataPutsItsRunOnePerLine(): Void {
+	@:killer('M-META-FIT-ARGS-IGNORED', 'M-META-FIT-ROW-GLUES')
+	public function testAComplexMetadataStandsOnItsOwnLine(): Void {
 		Assert.equals(
-			'class C {\n\t@:build(a().b())\n\t@:a\n\tvar t:Int;\n\n\t@:overload(function(a:Int):Void {})\n\tfunction o() {}\n\n'
+			'class C {\n\t@:build(a().b())\n\t@:a var t:Int;\n\n\t@:overload(function(a:Int):Void {})\n\tfunction o() {}\n\n'
 			+ '\t@:a(1, 2)\n\tvar u:Int;\n\t@:a({x: 1})\n\tvar v:Int;\n}\n',
 			fit(
 				'class C {\n\t@:build(a().b()) @:a var t:Int;\n\t@:overload(function(a:Int):Void {}) function o() {}\n\n'
 				+ '\t@:a(1, 2) var u:Int;\n\t@:a({x: 1}) var v:Int;\n}\n'
 			)
 		);
+	}
+
+	/**
+	 * A call-bearing metadata is never short: it never shares a line with another metadata, nor, after one, with its
+	 * declaration, while a lone one rides the declaration's line.
+	 */
+	@:pin('control')
+	@:killer('M-META-SHORT-CALL-ALLOWED')
+	public function testACallMetadataNeverJoinsAnotherMetadata(): Void {
+		Assert.equals(
+			'@:build(m.B.build())\n@:nullSafety(Strict) class A {\n\t@:op(a()) public function f():Void {}\n}\n',
+			fit('@:build(m.B.build())\n@:nullSafety(Strict)\nclass A {\n\t@:op(a())\n\tpublic function f():Void {}\n}\n')
+		);
+		Assert.equals(
+			'@:nullSafety(Strict)\n@:build(m.B.build())\nclass A {}\n', fit('@:nullSafety(Strict) @:build(m.B.build()) class A {}\n')
+		);
+	}
+
+	/**
+	 * Beside a call-bearing metadata, which stands alone, a segment of short neighbours is measured as a row of its own:
+	 * one line when it fits, else one metadata per line within the maximum, its last keeping the declaration's line.
+	 */
+	@:pin('control')
+	@:killer('M-META-FIT-SEG-ALL-SHORT-ONLY', 'M-META-FIT-ROW-UNGROUPED')
+	public function testAShortSegmentBesideACallMetadataWrapsWithinTheMaximum(): Void {
+		final shorts: Array<String> = [ for (c in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) '@:' + [ for (_ in 0...17) c ].join('') ];
+		final wide: String = '@:build(m.B.build())\n' + shorts.join('\n') + ' class A {}\n';
+		final fitting: String = '@:a @:b\n@:build(m.B.build())\n@:c @:d class B {}\n';
+		Assert.equals(wide, fit('@:build(m.B.build()) ' + shorts.join(' ') + ' class A {}\n'));
+		Assert.equals(fitting, fit('@:a @:b @:build(m.B.build()) @:c @:d class B {}\n'));
+		Assert.equals(wide, plain('@:build(m.B.build()) ' + shorts.join(' ') + ' class A {}\n'));
+		Assert.equals(fitting, plain('@:a @:b @:build(m.B.build()) @:c @:d class B {}\n'));
+	}
+
+	/** Under `none` every metadata run keeps the source's own layout, whatever its metadata. */
+	@:pin('guard')
+	public function testNoneKeepsEveryRunAsTheSourceHasIt(): Void {
+		final opt: HxModuleWriteOptions = options();
+		opt.metadataFunctionLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataTypeLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataVarLineEnd = MetadataLineEndPolicy.None;
+		opt.metadataOtherLineEnd = MetadataLineEndPolicy.None;
+		final src: String = '@:build(m.B.build())\n@:nullSafety(Strict)\nclass A {\n\t@:nullSafety(Off)\n\t@:bindable public var x:Int;\n\n'
+			+ '\t@SuppressWarnings(\'checkstyle:InnerAssignment\') @:op(A -= B) public function sub():Void {}\n\n'
+			+ '\t@:a @:b\n\tfunction g():Void {}\n}\n';
+		Assert.equals(src, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opt));
 	}
 
 	/** A single-quoted string that interpolates is no simple argument. */
@@ -206,8 +259,12 @@ class MetadataLineEndFitTest extends Test {
 	@:killer('M-META-FIT-ENUM-UNWIRED', 'M-META-FIT-ANON-UNWIRED')
 	public function testEnumConstructorsAndAnonFieldsFit(): Void {
 		Assert.equals(
-			'enum E {\n\t@:a A;\n\t@:a @:b(1)\n\tB;\n}\n\ntypedef T = {\n\t@:optional var a:Int;\n\t@:a @:b\n\tvar b:Int;\n}\n',
-			fit('enum E {\n\t@:a A;\n\t@:a @:b(1) B;\n}\n\ntypedef T = {\n\t@:optional var a:Int;\n\t@:a @:b var b:Int;\n}\n')
+			'enum E {\n\t@:a A;\n\t@:a @:b(1) B;\n\t@:a(f())\n\t@:b C;\n}\n\ntypedef T = {\n\t@:optional var a:Int;\n\t@:a(f())\n'
+			+ '\t@:b var b:Int;\n}\n',
+			fit(
+				'enum E {\n\t@:a A;\n\t@:a @:b(1) B;\n\t@:a(f()) @:b C;\n}\n\ntypedef T = {\n\t@:optional var a:Int;\n'
+				+ '\t@:a(f()) @:b var b:Int;\n}\n'
+			)
 		);
 	}
 
@@ -226,10 +283,11 @@ class MetadataLineEndFitTest extends Test {
 
 	/** The plain writer reads the same rules. */
 	@:pin('control')
-	@:killer('M-META-FIT-PLAIN-BREAKS')
+	@:killer('M-META-FIT-PLAIN-BREAKS', 'M-META-FIT-PLAIN-SHORT-UNWIRED')
 	public function testThePlainWriterFits(): Void {
 		Assert.equals('@:a class C {}\n', plain('@:a class C {}\n'));
-		Assert.equals('@:a @:b\nclass C {}\n', plain('@:a @:b class C {}\n'));
+		Assert.equals('@:a @:b class C {}\n', plain('@:a\n@:b class C {}\n'));
+		Assert.equals('@:build(m.B.build())\n@:b class C {}\n', plain('@:build(m.B.build()) @:b class C {}\n'));
 	}
 
 	/** A second write over any fixture's output changes nothing. */
